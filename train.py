@@ -21,6 +21,7 @@ gmf_config = {
     'use_cpu': True,
     'use_bachify_eval': False,
     'device_id': 0,
+    'model_dir': 'output/{}_Epoch{}_HR{:.4f}_NDCG{:.4f}.model'
 }
 
 mlp_config = {
@@ -38,6 +39,7 @@ mlp_config = {
     'use_bachify_eval': False,
     'device_id': 0,
     'pretrain': False,
+    'model_dir': 'output/{}_Epoch{}_HR{:.4f}_NDCG{:.4f}.model'
 }
 
 neumf_config = {
@@ -56,6 +58,7 @@ neumf_config = {
     'use_bachify_eval': True,
     'device_id': 0,
     'pretrain': False,
+    'model_dir': 'output/{}_Epoch{}_HR{:.4f}_NDCG{:.4f}.model'
 }
 
 # 데이터 경로 및 파일
@@ -118,6 +121,6 @@ for epoch in range(engine.config['num_epoch']):
 
     # 모델 저장
     model_path = os.path.join(output_dir, f"{engine.config['alias']}_Epoch{epoch}_HR{hit_ratio:.4f}_NDCG{ndcg:.4f}.model")
-    engine.save(model_path)
+    engine.save(model_path, epoch_id=epoch, hit_ratio=hit_ratio, ndcg=ndcg)
 
 print("\nAll models trained and evaluated successfully.")

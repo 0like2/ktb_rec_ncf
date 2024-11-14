@@ -100,13 +100,14 @@ class Loader:
         # 전처리 및 데이터셋 생성
         item_df['item_category'] = item_df['item_category'].astype("category").cat.codes
         item_df['media_type'] = item_df['media_type'].map({'short': 0, 'long': 1})
-        item_df['score'] = item_df['score'].astype(int)
+        item_df['score'] = item_df['score'].astype(float)
+        item_df['target'] = item_df['score'].apply(lambda x: 1 if x >= 0.85 else 0)  # target을 0과 1로 설정
         creator_df['channel_category'] = creator_df['channel_category'].astype("category").cat.codes
         creator_df['subscribers'] = creator_df['subscribers'].replace({',': ''}, regex=True).astype(int)
 
         # 정보 업데이트
-        self.num_users = creator_df['creator_id'].nunique() +10
-        self.num_items = item_df['item_id'].nunique() +10
+        self.num_users = creator_df['creator_id'].nunique() + 10
+        self.num_items = item_df['item_id'].nunique() + 10
         self.num_item_categories = item_df['item_category'].nunique()
         self.num_channel_categories = creator_df['channel_category'].nunique()
         self.max_subscribers = creator_df['subscribers'].max() + 1
@@ -114,11 +115,10 @@ class Loader:
         item_category_similarities = item_df['item_category'].apply(self.calculate_category_similarity).values
         user_tensor = item_df['item_id'].values
         item_tensor = creator_df['creator_id'].values
-        threshold = 0.85
-        target_tensor = (item_category_similarities >= threshold).astype(int)
+        target_tensor = item_df['target'].values  # target_tensor 생성
 
         return UserItemRatingDataset(
-            user_tensor, item_tensor, target_tensor,
+            user_tensor, item_tensor, target_tensor,  # 수정된 부분
             item_titles=item_df['title'].values,
             creator_names=creator_df['channel_name'].values,
             item_category=item_df['item_category'].values,

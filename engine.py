@@ -69,21 +69,75 @@ class Engine(object):
         self._writer.add_scalar('model/loss', total_loss, epoch_id)
 
     def evaluate(self, evaluate_data, epoch_id):
-        assert hasattr(self, 'model'), 'Please specify the exact model !'
+        assert hasattr(self, 'model'), 'Please specify the exact model!'
         self.model.eval()
+
+        # 평가 시작 출력
+        print(f"[Evaluating Epoch {epoch_id}] Starting evaluation...")
+
         with torch.no_grad():
-            test_users, test_items = evaluate_data[0], evaluate_data[1]
-            negative_users, negative_items = evaluate_data[2], evaluate_data[3]
-            test_users, test_items = test_users.to(self.device), test_items.to(self.device)
-            negative_users, negative_items = negative_users.to(self.device), negative_items.to(self.device)
+            positive_users, positive_items = [], []
+            positive_item_category, positive_media_type = [], []
+            positive_channel_category, positive_subscribers = [], []
 
-            test_scores = self.model(test_users, test_items)
-            negative_scores = self.model(negative_users, negative_items)
+            negative_users, negative_items = [], []
+            negative_item_category, negative_media_type = [], []
+            negative_channel_category, negative_subscribers = [], []
 
+            # 긍정 및 부정 샘플 분리
+            for batch in evaluate_data:
+                users = batch['user_id'].to(self.device)
+                items = batch['item_id'].to(self.device)
+                item_category = batch['item_category'].to(self.device)
+                media_type = batch['media_type'].to(self.device)
+                channel_category = batch['channel_category'].to(self.device)
+                subscribers = batch['subscribers'].to(self.device)
+                targets = batch['target'].to(self.device)
+
+                # Positive와 Negative 샘플 구분
+                positive_mask = targets == 1
+                negative_mask = targets == 0
+
+                positive_users.append(users[positive_mask])
+                positive_items.append(items[positive_mask])
+                positive_item_category.append(item_category[positive_mask])
+                positive_media_type.append(media_type[positive_mask])
+                positive_channel_category.append(channel_category[positive_mask])
+                positive_subscribers.append(subscribers[positive_mask])
+
+                negative_users.append(users[negative_mask])
+                negative_items.append(items[negative_mask])
+                negative_item_category.append(item_category[negative_mask])
+                negative_media_type.append(media_type[negative_mask])
+                negative_channel_category.append(channel_category[negative_mask])
+                negative_subscribers.append(subscribers[negative_mask])
+
+            # Positive와 Negative를 위한 텐서 결합 및 모델 예측
+            positive_users = torch.cat(positive_users)
+            positive_items = torch.cat(positive_items)
+            positive_item_category = torch.cat(positive_item_category)
+            positive_media_type = torch.cat(positive_media_type)
+            positive_channel_category = torch.cat(positive_channel_category)
+            positive_subscribers = torch.cat(positive_subscribers)
+
+            negative_users = torch.cat(negative_users)
+            negative_items = torch.cat(negative_items)
+            negative_item_category = torch.cat(negative_item_category)
+            negative_media_type = torch.cat(negative_media_type)
+            negative_channel_category = torch.cat(negative_channel_category)
+            negative_subscribers = torch.cat(negative_subscribers)
+
+            positive_scores = self.model(positive_users, positive_items, positive_item_category, positive_media_type,
+                                         positive_channel_category, positive_subscribers)
+
+            negative_scores = self.model(negative_users, negative_items, negative_item_category, negative_media_type,
+                                         negative_channel_category, negative_subscribers)
+
+            # 평가 지표 계산을 위한 데이터 설정
             self._metron.subjects = [
-                test_users.data.view(-1).tolist(),
-                test_items.data.view(-1).tolist(),
-                test_scores.data.view(-1).tolist(),
+                positive_users.data.view(-1).tolist(),
+                positive_items.data.view(-1).tolist(),
+                positive_scores.data.view(-1).tolist(),
                 negative_users.data.view(-1).tolist(),
                 negative_items.data.view(-1).tolist(),
                 negative_scores.data.view(-1).tolist()
@@ -92,7 +146,6 @@ class Engine(object):
         hit_ratio, ndcg = self._metron.cal_hit_ratio(), self._metron.cal_ndcg()
         self._writer.add_scalar('performance/HR', hit_ratio, epoch_id)
         self._writer.add_scalar('performance/NDCG', ndcg, epoch_id)
-        print(f'[Evaluating Epoch {epoch_id}] HR = {hit_ratio:.4f}, NDCG = {ndcg:.4f}')
         return hit_ratio, ndcg
 
     def save(self, alias, epoch_id, hit_ratio, ndcg):

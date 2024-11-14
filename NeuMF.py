@@ -120,6 +120,7 @@ class NeuMFEngine(Engine):
     def train_an_epoch_neumf(self, train_loader, epoch_id):
         self.model.train()
         total_loss = 0
+        print(f"Starting training for epoch {epoch_id}...")
         for batch_id, batch in enumerate(train_loader):
             user = batch['user_id']
             item = batch['item_id']
@@ -133,6 +134,7 @@ class NeuMFEngine(Engine):
                                                  subscribers)
             print(f'[Training Epoch {epoch_id}] Batch {batch_id}, Loss {loss}')
             total_loss += loss
+
 
         self._writer.add_scalar('model/loss', total_loss, epoch_id)
 
