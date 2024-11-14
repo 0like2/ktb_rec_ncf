@@ -23,7 +23,7 @@ class MLP(torch.nn.Module):
         self.embedding_media_type = torch.nn.Embedding(2, config['meta_latent_dim'])  # 2: short, long
         self.embedding_channel_category = torch.nn.Embedding(config['num_channel_categories'],
                                                              config['meta_latent_dim'])
-        self.embedding_subscribers = torch.nn.Embedding(config['subscribers'], config['meta_latent_dim'])
+        self.embedding_subscribers = torch.nn.Embedding(config['max_subscribers'], config['meta_latent_dim'])
 
         # MLP의 FC 레이어
         self.fc_layers = torch.nn.ModuleList()
@@ -97,3 +97,38 @@ class MLPEngine(Engine):
         # If pretraining is required, load weights
         if config['pretrain']:
             self.model.load_pretrain_weights()
+
+    def train_an_epoch_mlp(self, train_loader, epoch_id):
+        self.model.train()
+        total_loss = 0
+        for batch_id, batch in enumerate(train_loader):
+            user = batch['user_id']
+            item = batch['item_id']
+            rating = batch['target'].float()
+            item_category = batch['item_category']
+            media_type = batch['media_type']
+            channel_category = batch['channel_category']
+            subscribers = batch['subscribers']
+
+            loss = self.train_single_batch_mlp(user, item, rating, item_category, media_type, channel_category,
+                                               subscribers)
+            print(f'[Training Epoch {epoch_id}] Batch {batch_id}, Loss {loss}')
+            total_loss += loss
+
+        self._writer.add_scalar('model/loss', total_loss, epoch_id)
+
+    def train_single_batch_mlp(self, users, items, ratings, item_category, media_type, channel_category, subscribers):
+        users, items, ratings = users.to(self.device), items.to(self.device), ratings.to(self.device)
+        item_category, media_type, channel_category, subscribers = (
+            item_category.to(self.device),
+            media_type.to(self.device),
+            channel_category.to(self.device),
+            subscribers.to(self.device),
+        )
+
+        self.opt.zero_grad()
+        ratings_pred = self.model(users, items, item_category, media_type, channel_category, subscribers)
+        loss = self.crit(ratings_pred.view(-1), ratings)
+        loss.backward()
+        self.opt.step()
+        return loss

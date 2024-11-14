@@ -36,6 +36,25 @@ class Engine(object):
         loss = loss.item()
         return loss
 
+    def train_single_batch_mlp(self, users, items, ratings, item_category, media_type, channel_category, subscribers):
+        assert hasattr(self, 'model'), 'Please specify the exact model!'
+
+        # 장치 전송
+        users = users.to(self.device)
+        items = items.to(self.device)
+        ratings = ratings.to(self.device)
+        item_category = item_category.to(self.device)
+        media_type = media_type.to(self.device)
+        channel_category = channel_category.to(self.device)
+        subscribers = subscribers.to(self.device)
+
+        self.opt.zero_grad()
+        ratings_pred = self.model(users, items, item_category, media_type, channel_category, subscribers)
+        loss = self.crit(ratings_pred.view(-1), ratings)
+        loss.backward()
+        self.opt.step()
+        return loss
+
     def train_an_epoch(self, train_loader, epoch_id):
         assert hasattr(self, 'model'), 'Please specify the exact model !'
         self.model.train()

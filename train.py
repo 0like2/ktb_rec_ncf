@@ -1,13 +1,12 @@
+import os
+import torch
 import pandas as pd
-import numpy as np
 from gmf import GMFEngine
 from mlp import MLPEngine
 from NeuMF import NeuMFEngine
-from data_preprocess import Loader  # Assuming data_preprocess.py contains the necessary Loader class for preprocessing
-import torch
-import os
+from data_preprocess import Loader  # Assuming data_preprocess.py contains the Loader class for preprocessing
 
-# Configurations for the models
+# 모델 설정
 gmf_config = {
     'alias': 'gmf_factor8neg4-implict',
     'num_epoch': 200,
@@ -58,23 +57,23 @@ neumf_config = {
     'pretrain': False,
 }
 
-# Paths for data and similarity matrix
+# 데이터 로드 경로 및 파일
 file_path = 'input'
-similarity_matrix_file = 'similarity_matrix.csv'  # Use the precomputed similarity matrix
+similarity_matrix_file = 'similarity_matrix.csv'
 
-# Load the data using the Loader class
+# 데이터 로드
 loader = Loader(file_path, similarity_matrix_file)
 train_dataset, test_dataset = loader.load_dataset()
 
-# Automatically set num_users and num_items based on dataset
-num_users = train_dataset.num_users  # Assuming Loader provides this info
-num_items = train_dataset.num_items  # Assuming Loader provides this info
+# 데이터셋 정보 기반으로 config 업데이트
+num_users = train_dataset.num_users
+num_items = train_dataset.num_items
 
 common_config_updates = {
     'num_users': num_users,
     'num_items': num_items,
-    'num_item_categories': len(item_df['item_category'].unique()),  # 아이템 카테고리 수
-    'num_channel_categories': len(creator_df['channel_category'].unique()),  # 채널 카테고리 수
+    'num_item_categories': len(train_dataset.item_data['item_category'].unique()),  # 아이템 카테고리 수
+    'num_channel_categories': len(train_dataset.creator_data['channel_category'].unique()),  # 채널 카테고리 수
     'meta_latent_dim': 4  # 메타데이터의 임베딩 차원 (필요 시 조정)
 }
 
@@ -82,29 +81,43 @@ gmf_config.update(common_config_updates)
 mlp_config.update(common_config_updates)
 neumf_config.update(common_config_updates)
 
-# Create DataLoader for training and testing
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=neumf_config['batch_size'], shuffle=True)
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=neumf_config['batch_size'], shuffle=False)
+# DataLoader 생성
+train_loader = DataLoader(train_dataset, batch_size=neumf_config['batch_size'], shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=neumf_config['batch_size'], shuffle=False)
 
-# Choose the configuration for the model to train
-config = neumf_config  # Here we choose NeuMF configuration; can switch to gmf_config or mlp_config as needed
-engine = NeuMFEngine(config)
+# 모델 선택
+model_type = 'NeuMF'  # 'GMF', 'MLP', 'NeuMF' 중 하나 선택
 
-# Output directory for saving models
+if model_type == 'GMF':
+    engine = GMFEngine(gmf_config)
+elif model_type == 'MLP':
+    engine = MLPEngine(mlp_config)
+elif model_type == 'NeuMF':
+    engine = NeuMFEngine(neumf_config)
+else:
+    raise ValueError("Invalid model type. Choose 'GMF', 'MLP', or 'NeuMF'.")
+
+# 출력 디렉토리 생성
 output_dir = 'output'
 os.makedirs(output_dir, exist_ok=True)
 
-# Training loop
-for epoch in range(config['num_epoch']):
-    print(f'Epoch {epoch} starts!')
+# 학습 루프
+for epoch in range(engine.config['num_epoch']):
+    print(f"Epoch {epoch} starts!")
     print('-' * 80)
 
-    # Train the model for one epoch
-    engine.train_an_epoch(train_loader, epoch_id=epoch)
+    if model_type == 'MLP':
+        engine.train_an_epoch_mlp(train_loader, epoch)  # MLP 학습
+    elif model_type == 'NeuMF':
+        engine.train_an_epoch_neumf(train_loader, epoch)  # NeuMF 학습
+    else:
+        engine.train_an_epoch(train_loader, epoch)  # GMF 학습
 
-    # Evaluate the model
+    # 모델 평가
     hit_ratio, ndcg = engine.evaluate(test_loader, epoch_id=epoch)
 
-    # Save the model with performance metrics
-    model_path = os.path.join(output_dir, f"{config['alias']}_Epoch{epoch}_HR{hit_ratio:.4f}_NDCG{ndcg:.4f}.model")
+    # 모델 저장
+    model_path = os.path.join(output_dir, f"{engine.config['alias']}_Epoch{epoch}_HR{hit_ratio:.4f}_NDCG{ndcg:.4f}.model")
     engine.save(model_path)
+
+print("\nAll models trained and evaluated successfully.")
