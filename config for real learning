@@ -1,0 +1,50 @@
+# 모델 설정
+gmf_config = {
+    'alias': 'gmf_factor8neg4-implicit',
+    'num_epoch': 200,
+    'batch_size': 1024,
+    'optimizer': 'adam',
+    'adam_lr': 1e-3,
+    'latent_dim': 8,
+    'num_negative': 4,
+    'l2_regularization': 0,
+    'weight_init_gaussian': True,
+    'use_cpu': True,
+    'use_bachify_eval': False,
+    'device_id': 0,
+}
+
+mlp_config = {
+    'alias': 'mlp_factor8neg4_bz256_166432168_pretrain_reg_0.0000001',
+    'num_epoch': 200,
+    'batch_size': 256,
+    'optimizer': 'adam',
+    'adam_lr': 1e-3,
+    'latent_dim': 8,
+    'num_negative': 4,
+    'layers': [16, 64, 32, 16, 8],
+    'l2_regularization': 0.0000001,
+    'weight_init_gaussian': True,
+    'use_cpu': True,
+    'use_bachify_eval': False,
+    'device_id': 0,
+    'pretrain': False,
+}
+
+neumf_config = {
+    'alias': 'neumf_factor8neg4',
+    'num_epoch': 200,
+    'batch_size': 1024,
+    'optimizer': 'adam',
+    'adam_lr': 1e-3,
+    'latent_dim_mf': 8,
+    'latent_dim_mlp': 8,
+    'num_negative': 4,
+    'layers': [16, 64, 32, 16, 8],
+    'l2_regularization': 0.0000001,
+    'weight_init_gaussian': True,
+    'use_cpu': True,
+    'use_bachify_eval': True,
+    'device_id': 0,
+    'pretrain': False,
+}

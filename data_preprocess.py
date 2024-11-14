@@ -22,66 +22,8 @@ class TextEmbedder:
 
 
 # Dataset 클래스 정의
+# 데이터셋 클래스 (UserItemRatingDatasetMLP로 통일)
 class UserItemRatingDataset(Dataset):
-    def __init__(self, user_tensor, item_tensor, target_tensor, item_titles, creator_names, item_category_similarities):
-        self.user_tensor = torch.tensor(user_tensor, dtype=torch.long)
-        self.item_tensor = torch.tensor(item_tensor, dtype=torch.long)
-        self.target_tensor = torch.tensor(target_tensor, dtype=torch.float)
-        self.item_titles = item_titles
-        self.creator_names = creator_names
-        self.item_category_similarities = torch.tensor(item_category_similarities, dtype=torch.float)
-
-        self.text_embedder = TextEmbedder()
-
-        # 임베딩 계산
-        self.item_embeddings = [self.text_embedder.get_text_embedding(title) for title in self.item_titles]
-        self.creator_embeddings = [self.text_embedder.get_text_embedding(name) for name in self.creator_names]
-
-    def __len__(self):
-        return len(self.user_tensor)
-
-    def __getitem__(self, idx):
-        item_embedding = self.item_embeddings[idx]
-        creator_embedding = self.creator_embeddings[idx]
-        similarity_score = cosine_similarity([item_embedding], [creator_embedding])[0][0]
-
-        # 아이템과 크리에이터의 임베딩, 카테고리 유사도를 결합
-        combined_features = torch.cat([torch.tensor(item_embedding, dtype=torch.float),
-                                       torch.tensor(creator_embedding, dtype=torch.float),
-                                       self.item_category_similarities[idx].unsqueeze(0)], dim=-1)
-
-        return {
-            'user_id': self.user_tensor[idx],
-            'item_id': self.item_tensor[idx],
-            'target': self.target_tensor[idx],
-            'item_embedding': torch.tensor(item_embedding, dtype=torch.float),
-            'creator_embedding': torch.tensor(creator_embedding, dtype=torch.float),
-            'similarity_score': torch.tensor(similarity_score, dtype=torch.float),
-            'combined_features': combined_features
-        }
-
-class UserItemRatingDatasetGMF(Dataset):
-    def __init__(self, user_tensor, item_tensor, target_tensor):
-        self.user_tensor = torch.tensor(user_tensor, dtype=torch.long)
-        self.item_tensor = torch.tensor(item_tensor, dtype=torch.long)
-        self.target_tensor = torch.tensor(target_tensor, dtype=torch.float)
-
-    def __len__(self):
-        return len(self.user_tensor)
-
-    def __getitem__(self, idx):
-        user_id = self.user_tensor[idx]
-        item_id = self.item_tensor[idx]
-        target = self.target_tensor[idx]
-
-        return {
-            'user_id': user_id,  # 사용자 ID
-            'item_id': item_id,  # 아이템 ID
-            'target': target  # 타겟 레이블
-        }
-
-# MLP에 맞는 Dataset 클래스 정의
-class UserItemRatingDatasetMLP(Dataset):
     def __init__(self, user_tensor, item_tensor, target_tensor, item_titles, creator_names,
                  item_category, media_type, channel_category, subscribers, item_category_similarities):
         self.user_tensor = torch.tensor(user_tensor, dtype=torch.long)
@@ -107,29 +49,33 @@ class UserItemRatingDatasetMLP(Dataset):
     def __getitem__(self, idx):
         item_embedding = self.item_embeddings[idx]
         creator_embedding = self.creator_embeddings[idx]
-        similarity_score = cosine_similarity([item_embedding], [creator_embedding])[0][0]
+        item_category_similarity = torch.tensor(self.item_category_similarities[idx], dtype=torch.float).unsqueeze(0)
 
-        # 아이템과 크리에이터의 임베딩, 카테고리 유사도를 결합
-        combined_features = torch.cat([torch.tensor(item_embedding, dtype=torch.float),
-                                       torch.tensor(creator_embedding, dtype=torch.float),
-                                       self.item_category_similarities[idx].unsqueeze(0),
-                                       torch.tensor(self.item_category[idx], dtype=torch.long),  # item category
-                                       torch.tensor(self.media_type[idx], dtype=torch.long),  # media type
-                                       torch.tensor(self.channel_category[idx], dtype=torch.long),  # channel category
-                                       torch.tensor(self.subscribers[idx], dtype=torch.float)], dim=-1)  # subscribers
+        # combined_features = torch.cat([
+        #     item_embedding,
+        #     creator_embedding,
+        #     item_category_similarity,  # Use item_category_similarity directly
+        #     torch.tensor(self.item_category[idx], dtype=torch.long).unsqueeze(0),
+        #     torch.tensor(self.media_type[idx], dtype=torch.long).unsqueeze(0),
+        #     torch.tensor(self.channel_category[idx], dtype=torch.long).unsqueeze(0),
+        #     torch.tensor(self.subscribers[idx], dtype=torch.float).unsqueeze(0)
+        # ], dim=-1)
 
         return {
             'user_id': self.user_tensor[idx],
             'item_id': self.item_tensor[idx],
             'target': self.target_tensor[idx],
+            'item_category': torch.tensor(self.item_category[idx], dtype=torch.long),
+            'media_type': torch.tensor(self.media_type[idx], dtype=torch.long),
+            'channel_category': torch.tensor(self.channel_category[idx], dtype=torch.long),
+            'subscribers': torch.tensor(self.subscribers[idx], dtype=torch.long),
             'item_embedding': torch.tensor(item_embedding, dtype=torch.float),
             'creator_embedding': torch.tensor(creator_embedding, dtype=torch.float),
-            'similarity_score': torch.tensor(similarity_score, dtype=torch.float),
-            'combined_features': combined_features
+            'item_category_similarity': item_category_similarity,  # Changed to item_category_similarity
+            # 'combined_features': combined_features
         }
 
 
-# Loader 클래스 정의
 class Loader:
     def __init__(self, file_path, similarity_matrix_file):
         self.file_path = file_path
@@ -137,61 +83,56 @@ class Loader:
         self.similarity_matrix = self.load_similarity_matrix()
         self.text_embedder = TextEmbedder()
 
+        # 변수 초기화 - 모델 설정 시 필요로 하는 각종 메타데이터 변수 추가
+        self.num_users = None  # 사용자 수
+        self.num_items = None  # 아이템 수
+        self.num_item_categories = None  # 아이템 카테고리 수
+        self.num_channel_categories = None  # 채널 카테고리 수
+        self.max_subscribers = None  # 최대 구독자 수
+
     def load_similarity_matrix(self):
         return pd.read_csv(self.similarity_matrix_file, index_col=0)
 
-    def load_dataset(self, dataset_type='GMF'):
+    def load_dataset(self):
         item_df = pd.read_csv(self.file_path + '/Item_random25.csv')
         creator_df = pd.read_csv(self.file_path + '/Creator_random25.csv')
 
-        # 전처리 과정
+        # 전처리 및 데이터셋 생성
         item_df['item_category'] = item_df['item_category'].astype("category").cat.codes
         item_df['media_type'] = item_df['media_type'].map({'short': 0, 'long': 1})
         item_df['score'] = item_df['score'].astype(int)
-
         creator_df['channel_category'] = creator_df['channel_category'].astype("category").cat.codes
-        creator_df['subscribers'] = creator_df['subscribers'].astype(int)
+        creator_df['subscribers'] = creator_df['subscribers'].replace({',': ''}, regex=True).astype(int)
 
-        # BERT 임베딩 생성
-        item_embeddings = [self.text_embedder.get_text_embedding(title) for title in item_df['title']]
-        creator_embeddings = [self.text_embedder.get_text_embedding(name) for name in creator_df['channel_name']]
+        # 정보 업데이트
+        self.num_users = creator_df['creator_id'].nunique() +10
+        self.num_items = item_df['item_id'].nunique() +10
+        self.num_item_categories = item_df['item_category'].nunique()
+        self.num_channel_categories = creator_df['channel_category'].nunique()
+        self.max_subscribers = creator_df['subscribers'].max() + 1
 
-        # 카테고리 유사도 계산
         item_category_similarities = item_df['item_category'].apply(self.calculate_category_similarity).values
-
-        # 데이터셋 생성
         user_tensor = item_df['item_id'].values
         item_tensor = creator_df['creator_id'].values
-        target_tensor = item_df['score'].values  # 임의의 타겟 예시
+        threshold = 0.85
+        target_tensor = (item_category_similarities >= threshold).astype(int)
 
-        if dataset_type == 'GMF':
-            return UserItemRatingDatasetGMF(user_tensor, item_tensor, target_tensor)
-        elif dataset_type == 'MLP':
-            return UserItemRatingDatasetMLP(user_tensor, item_tensor, target_tensor,
-                                            item_titles=item_df['title'].values,
-                                            creator_names=creator_df['channel_name'].values,
-                                            item_category=item_df['item_category'].values,
-                                            media_type=item_df['media_type'].values,
-                                            channel_category=creator_df['channel_category'].values,
-                                            subscribers=creator_df['subscribers'].values,
-                                            item_category_similarities=item_category_similarities)
-        elif dataset_type == 'NeuMF':
-            return UserItemRatingDataset(user_tensor, item_tensor, target_tensor,
-                                         item_titles=item_df['title'].values,
-                                         creator_names=creator_df['channel_name'].values,
-                                         item_category_similarities=item_category_similarities)
-        else:
-            raise ValueError("Unknown dataset type: {}".format(dataset_type))
-
-    def load_processed_data(self):
-        with open('processed_data.pkl', 'rb') as f:
-            processed_data = pickle.load(f)
-        return processed_data
+        return UserItemRatingDataset(
+            user_tensor, item_tensor, target_tensor,
+            item_titles=item_df['title'].values,
+            creator_names=creator_df['channel_name'].values,
+            item_category=item_df['item_category'].values,
+            media_type=item_df['media_type'].values,
+            channel_category=creator_df['channel_category'].values,
+            subscribers=creator_df['subscribers'].values,
+            item_category_similarities=item_category_similarities
+        )
 
     def calculate_category_similarity(self, category_code):
+        # 유사도 매트릭스에서 카테고리 코드에 맞는 유사도 값 반환
         if category_code in self.similarity_matrix.columns:
             return self.similarity_matrix.loc[category_code, category_code]
-        return 0.5
+        return 0.5  # 기본 유사도 값 설정
 
     def create_bidirectional_data(self, item_data):
         item_user_data = item_data[['item_id', 'item_category_similarity']]

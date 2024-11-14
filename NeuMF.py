@@ -116,3 +116,38 @@ class NeuMFEngine(Engine):
 
         if config['pretrain']:
             self.model.load_pretrain_weights()
+
+    def train_an_epoch_neumf(self, train_loader, epoch_id):
+        self.model.train()
+        total_loss = 0
+        for batch_id, batch in enumerate(train_loader):
+            user = batch['user_id']
+            item = batch['item_id']
+            rating = batch['target'].float()
+            item_category = batch['item_category']
+            media_type = batch['media_type']
+            channel_category = batch['channel_category']
+            subscribers = batch['subscribers']
+
+            loss = self.train_single_batch_neumf(user, item, rating, item_category, media_type, channel_category,
+                                                 subscribers)
+            print(f'[Training Epoch {epoch_id}] Batch {batch_id}, Loss {loss}')
+            total_loss += loss
+
+        self._writer.add_scalar('model/loss', total_loss, epoch_id)
+
+    def train_single_batch_neumf(self, users, items, ratings, item_category, media_type, channel_category, subscribers):
+        users, items, ratings = users.to(self.device), items.to(self.device), ratings.to(self.device)
+        item_category, media_type, channel_category, subscribers = (
+            item_category.to(self.device),
+            media_type.to(self.device),
+            channel_category.to(self.device),
+            subscribers.to(self.device),
+        )
+
+        self.opt.zero_grad()
+        ratings_pred = self.model(users, items, item_category, media_type, channel_category, subscribers)
+        loss = self.crit(ratings_pred.view(-1), ratings)
+        loss.backward()
+        self.opt.step()
+        return loss
