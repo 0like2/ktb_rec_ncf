@@ -15,7 +15,6 @@ class TextEmbedder:
         self.model = BertModel.from_pretrained(model_name)
 
     def get_text_embedding(self, text):
-        # 텍스트를 BERT로 임베딩
         inputs = self.tokenizer(text, return_tensors='pt', padding=True, truncation=True, max_length=32)
         with torch.no_grad():
             outputs = self.model(**inputs)
