@@ -1,5 +1,6 @@
 import os
 import torch
+import pickle
 import pandas as pd
 from torch.utils.data import DataLoader
 from gmf import GMFEngine
@@ -68,6 +69,15 @@ similarity_matrix_file = 'similarity_matrix.csv'
 # 데이터 로드
 loader = Loader(file_path, similarity_matrix_file)
 train_dataset = loader.load_dataset()
+print("Sample user IDs:", train_dataset.user_tensor[:10])
+print("Sample item IDs:", train_dataset.item_tensor[:10])
+
+# 디버깅: 데이터셋 확인 -> 삭제 필요
+if train_dataset is None:
+    raise ValueError("train_dataset is None. Check Loader.load_dataset().")
+
+print(f"Train dataset loaded successfully: {len(train_dataset)} samples")
+
 
 # 데이터셋 정보 기반으로 config 업데이트
 common_config_updates = {
@@ -99,9 +109,12 @@ elif model_type == 'NeuMF':
 else:
     raise ValueError("Invalid model type. Choose 'GMF', 'MLP', or 'NeuMF'.")
 
-# 출력 디렉토리 생성
-output_dir = 'output'
-os.makedirs(output_dir, exist_ok=True)
+# 모델 및 설정 파일 저장 디렉토리 설정
+output_dir = "output"
+model_dir = os.path.join(output_dir, "model")
+config_dir = os.path.join(output_dir, "config")
+os.makedirs(model_dir, exist_ok=True)
+os.makedirs(config_dir, exist_ok=True)
 
 # 학습 루프
 for epoch in range(engine.config['num_epoch']):
@@ -119,8 +132,17 @@ for epoch in range(engine.config['num_epoch']):
     # 모델 평가
     hit_ratio, ndcg = engine.evaluate(train_loader, epoch_id=epoch)
 
-    # 모델 저장
-    model_path = os.path.join(output_dir, f"{engine.config['alias']}_Epoch{epoch}_HR{hit_ratio:.4f}_NDCG{ndcg:.4f}.model")
-    engine.save(model_path, epoch_id=epoch, hit_ratio=hit_ratio, ndcg=ndcg)
+    model_filename = f"{engine.config['alias']}_Epoch{epoch}_HR{hit_ratio:.4f}_NDCG{ndcg:.4f}.model"
+    model_path = os.path.join(model_dir, model_filename)
+
+    engine.save(engine.config['alias'], epoch, hit_ratio, ndcg)
+
+    # Config 저장 (pickle 사용)
+    config_path = os.path.join(config_dir, f"config_epoch_{epoch}.pkl")
+    with open(config_path, "wb") as f:
+        pickle.dump(engine.config, f)
+
+    print(f"Model saved to: {model_path}")
+    print(f"Config saved to: {config_path}")
 
 print("\nAll models trained and evaluated successfully.")

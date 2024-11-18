@@ -53,7 +53,9 @@ class Engine(object):
         loss = self.crit(ratings_pred.view(-1), ratings)
         loss.backward()
         self.opt.step()
+
         return loss
+
 
     def train_an_epoch(self, train_loader, epoch_id):
         assert hasattr(self, 'model'), 'Please specify the exact model !'
