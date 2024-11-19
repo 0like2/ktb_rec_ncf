@@ -25,6 +25,10 @@ class Recommender:
         self.loader = Loader(file_path, similarity_matrix_file)
         self.text_embedder = TextEmbedder()
 
+        # 사용자 및 아이템 메타데이터 로드
+        self.user_metadata = self.loader.load_user_metadata()
+        self.item_metadata = self.loader.load_item_metadata()
+
     def preprocess_new_item(self, data):
         """
         새로운 아이템 데이터 전처리
@@ -81,8 +85,19 @@ class Recommender:
             scores = scores.view(-1).cpu().numpy()
 
         top_k_indices = scores.argsort()[-top_k:][::-1].copy()
-        recommended_users = user_ids_tensor[top_k_indices].cpu().numpy()
-        return recommended_users, scores[top_k_indices]
+        recommended_user_ids = user_ids_tensor[top_k_indices].cpu().numpy()
+
+        # 사용자 메타데이터에서 추천된 사용자 정보를 가져옴
+        recommended_creator_data = []
+        for user_id in recommended_user_ids:
+            user_metadata = self.user_metadata[user_id]
+            recommended_creator_data.append({
+                'channel_category': user_metadata['channel_category'],
+                'channel_name': user_metadata['channel_name'],
+                'subscribers': user_metadata['subscribers']
+            })
+
+        return recommended_creator_data
 
     def recommend_for_new_creator(self, creator_data, top_k=10):
         """
@@ -114,7 +129,20 @@ class Recommender:
 
         top_k_indices = scores.argsort()[-top_k:][::-1].copy()
         recommended_items = item_ids_tensor[top_k_indices].cpu().numpy()
-        return recommended_items, scores[top_k_indices]
+
+        # 아이템 메타데이터에서 추천된 아이템 정보를 가져옴
+        recommended_item_data = []
+        for item_id in recommended_items:
+            item_metadata = self.item_metadata[item_id]
+            recommended_item_data.append({
+                'title': item_metadata['title'],
+                'item_category': item_metadata['item_category'],
+                'media_type': item_metadata['media_type'],
+                'score': item_metadata['score'],
+                'item_content': item_metadata['item_content']
+            })
+
+        return recommended_item_data
 
 
 if __name__ == "__main__":
@@ -135,8 +163,8 @@ if __name__ == "__main__":
     }
 
     # 아이템에 대한 사용자 추천
-    recommended_users, user_scores = recommender.recommend_for_new_item(new_item_data)
-    print(f"추천 사용자 목록: {recommended_users} (Scores: {user_scores})")
+    recommended_users = recommender.recommend_for_new_item(new_item_data)
+    print(f"추천 사용자 목록: {recommended_users}")
 
     # 새로운 creator 데이터 예시
     new_creator_data = {
@@ -146,5 +174,5 @@ if __name__ == "__main__":
     }
 
     # 크리에이터에 대한 아이템 추천
-    recommended_items, item_scores = recommender.recommend_for_new_creator(new_creator_data)
-    print(f"추천 아이템 목록: {recommended_items} (Scores: {item_scores})")
+    recommended_items = recommender.recommend_for_new_creator(new_creator_data)
+    print(f"추천 아이템 목록: {recommended_items}")

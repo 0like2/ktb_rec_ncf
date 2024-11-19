@@ -126,6 +126,24 @@ class Loader:
             item_category_similarities=item_category_similarities
         )
 
+    def load_user_metadata(self):
+        """
+        사용자 메타데이터 로드
+        """
+        user_metadata_file = f"{self.file_path}/Creator_random25.csv"  # 사용자 데이터 경로
+        user_metadata = pd.read_csv(user_metadata_file)
+        user_metadata_dict = user_metadata.to_dict('index')  # DataFrame을 딕셔너리로 변환
+        return user_metadata_dict
+
+    def load_item_metadata(self):
+        """
+        아이템 메타데이터 로드
+        """
+        item_metadata_file = f"{self.file_path}/Item_random25.csv"  # 아이템 데이터 경로
+        item_metadata = pd.read_csv(item_metadata_file)
+        item_metadata_dict = item_metadata.to_dict('index')  # DataFrame을 딕셔너리로 변환
+        return item_metadata_dict
+
     def get_meta_info(self):
         """모든 메타 정보를 반환"""
         return {
