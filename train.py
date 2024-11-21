@@ -85,7 +85,7 @@ common_config_updates = {
     'num_item_categories': loader.num_item_categories,  # 아이템 카테고리 수
     'num_channel_categories': loader.num_channel_categories,  # 채널 카테고리 수
     'meta_latent_dim': 4,  # 메타데이터 임베딩 차원
-    'max_subscribers': loader.max_subscribers  # 구독자 수의 최대값
+    'max_subscribers': 101  # 구독자 수의 최대값
 }
 
 # 설정 업데이트
@@ -95,6 +95,11 @@ neumf_config.update(common_config_updates)
 
 # DataLoader 생성
 train_loader = DataLoader(train_dataset, batch_size=neumf_config['batch_size'], shuffle=True)
+
+# 데이터 디버깅: 구독자 값 확인 -> 삭제 필요
+for batch in train_loader:
+    print(f"Subscribers in batch: {batch['subscribers']}")  # 정규화된 구독자 값
+    break
 
 # 모델 선택
 model_type = 'NeuMF'  # 'GMF', 'MLP', 'NeuMF' 중 하나 선택
