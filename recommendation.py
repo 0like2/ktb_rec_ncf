@@ -92,6 +92,7 @@ class Recommender:
         for user_id in recommended_user_ids:
             user_metadata = self.user_metadata[user_id]
             recommended_creator_data.append({
+                'creator_id': int(user_id),
                 'channel_category': user_metadata['channel_category'],
                 'channel_name': user_metadata['channel_name'],
                 'subscribers': user_metadata['subscribers']
@@ -135,6 +136,7 @@ class Recommender:
         for item_id in recommended_items:
             item_metadata = self.item_metadata[item_id]
             recommended_item_data.append({
+                'item_id': int(item_id),
                 'title': item_metadata['title'],
                 'item_category': item_metadata['item_category'],
                 'media_type': item_metadata['media_type'],
