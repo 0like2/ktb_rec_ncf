@@ -6,19 +6,25 @@ import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 from torch.utils.data import Dataset
 import numpy as np
-
+from sentence_transformers import SentenceTransformer
 
 # BERT 임베딩을 위한 클래스
 class TextEmbedder:
-    def __init__(self, model_name='bert-base-cased'):
-        self.tokenizer = BertTokenizer.from_pretrained(model_name)
-        self.model = BertModel.from_pretrained(model_name)
+    def __init__(self, model_name='paraphrase-MiniLM-L6-v2'):
+        self.model = SentenceTransformer(model_name)
 
     def get_text_embedding(self, text):
-        inputs = self.tokenizer(text, return_tensors='pt', padding=True, truncation=True, max_length=32)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-        return outputs.last_hidden_state[0][0].numpy()
+        if not text or text.strip() == "":  # 빈 문자열 또는 None 체크
+            print(f"Warning: Empty text encountered. Text value: '{text}'")
+            raise ValueError("Text input is empty or invalid. Please check the data source.")  # 예외 발생
+
+        try:
+            embedding = self.model.encode(text)
+        except Exception as e:  # Sentence-BERT에서 예외 발생 시 처리
+            print(f"Error encoding text '{text}': {e}")
+            raise e  # 예외를 다시 발생시켜 문제를 명확히 표시
+
+        return embedding
 
 
 # Dataset 클래스 정의
@@ -35,9 +41,7 @@ class UserItemRatingDataset(Dataset):
         self.channel_category = channel_category
         self.subscribers = subscribers
         self.item_category_similarities = torch.tensor(item_category_similarities, dtype=torch.float)
-
         self.text_embedder = TextEmbedder()
-
         # 임베딩 계산
         self.item_embeddings = [self.text_embedder.get_text_embedding(title) for title in self.item_titles]
         self.creator_embeddings = [self.text_embedder.get_text_embedding(name) for name in self.creator_names]

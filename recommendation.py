@@ -55,7 +55,7 @@ class Recommender:
             'subscribers': data['subscribers'],
             'item_category': 0,
             'media_type': 0,
-            'item_embedding': torch.zeros(768)
+            'item_embedding': torch.zeros(384)
         }
         return data
 

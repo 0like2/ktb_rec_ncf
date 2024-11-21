@@ -69,8 +69,7 @@ similarity_matrix_file = 'similarity_matrix.csv'
 # 데이터 로드
 loader = Loader(file_path, similarity_matrix_file)
 train_dataset = loader.load_dataset()
-print("Sample user IDs:", train_dataset.user_tensor[:10])
-print("Sample item IDs:", train_dataset.item_tensor[:10])
+
 
 # 디버깅: 데이터셋 확인 -> 삭제 필요
 if train_dataset is None:
