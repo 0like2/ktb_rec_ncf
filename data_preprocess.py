@@ -7,28 +7,58 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 # BERT 임베딩을 위한 클래스
+
+import openai
+
 class TextEmbedder:
-    def __init__(self, model_name='paraphrase-MiniLM-L6-v2'):
-        self.model = SentenceTransformer(model_name)
+    def __init__(self, api_key, model_name='text-embedding-ada-002'):
+        """
+        OpenAI API를 사용한 임베딩 생성 클래스.
+
+        Args:
+            api_key (str): OpenAI API 키
+            model_name (str): OpenAI에서 사용할 임베딩 모델 이름
+        """
+        self.api_key = api_key
+        self.model_name = model_name
+        openai.api_key = self.api_key  # API 키 설정
 
     def get_text_embedding(self, text):
-        if not text or text.strip() == "":  # 빈 문자열 또는 None 체크
-            print(f"Warning: Empty text encountered. Text value: '{text}'")
-            raise ValueError("Text input is empty or invalid. Please check the data source.")  # 예외 발생
+        """
+        텍스트를 OpenAI API를 사용하여 임베딩으로 변환.
+
+        Args:
+            text (str): 임베딩할 텍스트
+
+        Returns:
+            list: 생성된 임베딩 벡터
+
+        Raises:
+            ValueError: 텍스트가 빈 문자열이거나 None일 경우
+            Exception: OpenAI API 호출 중 에러 발생 시
+        """
+        if not text or text.strip() == "":
+            raise ValueError("Text input is empty or invalid.")
 
         try:
-            embedding = self.model.encode(text)
-        except Exception as e:  # Sentence-BERT에서 예외 발생 시 처리
+            # 최신 OpenAI API 인터페이스 사용
+            response = openai.Embedding.create(
+                input=[text],  # 텍스트를 리스트로 전달
+                model=self.model_name
+            )
+            embedding = response.data[0].embedding  # 첫 번째 임베딩 추출
+        except Exception as e:
             print(f"Error encoding text '{text}': {e}")
-            raise e  # 예외를 다시 발생시켜 문제를 명확히 표시
+            raise e
 
         return embedding
+
 
 
 # Dataset 클래스 정의
 class UserItemRatingDataset(Dataset):
     def __init__(self, user_tensor, item_tensor, target_tensor, item_titles, creator_names,
-                 item_category, media_type, channel_category, subscribers, item_category_similarities):
+                 item_category, media_type, channel_category, subscribers, item_category_similarities,api_key):
         self.user_tensor = torch.tensor(user_tensor, dtype=torch.long)
         self.item_tensor = torch.tensor(item_tensor, dtype=torch.long)
         self.target_tensor = torch.tensor(target_tensor, dtype=torch.float)
@@ -39,7 +69,7 @@ class UserItemRatingDataset(Dataset):
         self.channel_category = channel_category
         self.subscribers = subscribers
         self.item_category_similarities = torch.tensor(item_category_similarities, dtype=torch.float)
-        self.text_embedder = TextEmbedder()
+        self.text_embedder = TextEmbedder(api_key=api_key)
         # 임베딩 계산
         self.item_embeddings = [self.text_embedder.get_text_embedding(title) for title in self.item_titles]
         self.creator_embeddings = [self.text_embedder.get_text_embedding(name) for name in self.creator_names]
@@ -63,15 +93,16 @@ class UserItemRatingDataset(Dataset):
             'item_embedding': torch.tensor(item_embedding, dtype=torch.float),
             'creator_embedding': torch.tensor(creator_embedding, dtype=torch.float),
             'item_category_similarity': item_category_similarity,
+
         }
 
 
 class Loader:
-    def __init__(self, file_path, similarity_matrix_file):
+    def __init__(self, file_path, similarity_matrix_file,api_key):
         self.file_path = file_path
         self.similarity_matrix_file = similarity_matrix_file
         self.similarity_matrix = self.load_similarity_matrix()
-        self.text_embedder = TextEmbedder()
+        self.text_embedder = TextEmbedder(api_key=api_key)  # API 키 전달
 
         # 변수 초기화
         self.num_users = None
@@ -141,7 +172,8 @@ class Loader:
             media_type=item_df['media_type'].values,
             channel_category=creator_df['channel_category'].values,
             subscribers=creator_df['subscribers'].values,  # 원본 값 사용
-            item_category_similarities=item_category_similarities
+            item_category_similarities=item_category_similarities,
+            api_key=self.text_embedder.api_key  # API 키 전달
         )
 
     def load_user_metadata(self):

@@ -7,6 +7,7 @@ from gmf import GMFEngine
 from mlp import MLPEngine
 from NeuMF import NeuMFEngine
 from data_preprocess import Loader
+from dotenv import load_dotenv
 
 # 모델 설정
 gmf_config = {
@@ -66,8 +67,11 @@ neumf_config = {
 file_path = 'input'
 similarity_matrix_file = 'similarity_matrix.csv'
 
+# OpenAI API Key: Retrieve from environment variable or replace with actual key
+API_KEY = os.getenv('OPENAI_API_KEY', 'your-openai-api-key')
+
 # 데이터 로드
-loader = Loader(file_path, similarity_matrix_file)
+loader = Loader(file_path, similarity_matrix_file, api_key=API_KEY)
 train_dataset = loader.load_dataset()
 
 
