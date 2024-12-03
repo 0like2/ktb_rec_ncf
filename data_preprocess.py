@@ -1,52 +1,47 @@
-import pickle
-from sklearn.model_selection import train_test_split
+# import pickle
+# from sklearn.model_selection import train_test_split
 import torch
 import pandas as pd
 from torch.utils.data import Dataset
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-# BERT 임베딩을 위한 클래스
 
-import openai
+# BERT 임베딩을 위한 클래스
+from langchain_openai import OpenAIEmbeddings
 
 class TextEmbedder:
-    def __init__(self, api_key, model_name='text-embedding-ada-002'):
+    def __init__(self, api_key=None, model_name='text-embedding-3-small', dimensions=None):
         """
-        OpenAI API를 사용한 임베딩 생성 클래스.
+        Initializes the TextEmbedder with the specified OpenAI embedding model.
 
         Args:
-            api_key (str): OpenAI API 키
-            model_name (str): OpenAI에서 사용할 임베딩 모델 이름
+            model_name (str): The name of the OpenAI embedding model to use.
+            dimensions (int, optional): The number of dimensions for the embeddings.
+                Only supported in 'text-embedding-3' and later models.
         """
-        self.api_key = api_key
-        self.model_name = model_name
-        openai.api_key = self.api_key  # API 키 설정
+        self.embedder = OpenAIEmbeddings(api_key=api_key, model=model_name, dimensions=dimensions)
 
     def get_text_embedding(self, text):
         """
-        텍스트를 OpenAI API를 사용하여 임베딩으로 변환.
+        Converts text to an embedding vector using the OpenAI API.
 
         Args:
-            text (str): 임베딩할 텍스트
+            text (str): The text to embed.
 
         Returns:
-            list: 생성된 임베딩 벡터
+            list: The generated embedding vector.
 
         Raises:
-            ValueError: 텍스트가 빈 문자열이거나 None일 경우
-            Exception: OpenAI API 호출 중 에러 발생 시
+            ValueError: If the text is empty or invalid.
+            Exception: If an error occurs during the embedding process.
         """
         if not text or text.strip() == "":
             raise ValueError("Text input is empty or invalid.")
 
         try:
-            # 최신 OpenAI API 인터페이스 사용
-            response = openai.Embedding.create(
-                input=[text],  # 텍스트를 리스트로 전달
-                model=self.model_name
-            )
-            embedding = response.data[0].embedding  # 첫 번째 임베딩 추출
+            # Generate the embedding for the input text
+            embedding = self.embedder.embed_query(text)
         except Exception as e:
             print(f"Error encoding text '{text}': {e}")
             raise e
@@ -58,7 +53,7 @@ class TextEmbedder:
 # Dataset 클래스 정의
 class UserItemRatingDataset(Dataset):
     def __init__(self, user_tensor, item_tensor, target_tensor, item_titles, creator_names,
-                 item_category, media_type, channel_category, subscribers, item_category_similarities,api_key):
+                 item_category, media_type, channel_category, subscribers, item_category_similarities):
         self.user_tensor = torch.tensor(user_tensor, dtype=torch.long)
         self.item_tensor = torch.tensor(item_tensor, dtype=torch.long)
         self.target_tensor = torch.tensor(target_tensor, dtype=torch.float)
@@ -69,7 +64,7 @@ class UserItemRatingDataset(Dataset):
         self.channel_category = channel_category
         self.subscribers = subscribers
         self.item_category_similarities = torch.tensor(item_category_similarities, dtype=torch.float)
-        self.text_embedder = TextEmbedder(api_key=api_key)
+        self.text_embedder = TextEmbedder()
         # 임베딩 계산
         self.item_embeddings = [self.text_embedder.get_text_embedding(title) for title in self.item_titles]
         self.creator_embeddings = [self.text_embedder.get_text_embedding(name) for name in self.creator_names]
@@ -93,16 +88,15 @@ class UserItemRatingDataset(Dataset):
             'item_embedding': torch.tensor(item_embedding, dtype=torch.float),
             'creator_embedding': torch.tensor(creator_embedding, dtype=torch.float),
             'item_category_similarity': item_category_similarity,
-
         }
 
 
 class Loader:
-    def __init__(self, file_path, similarity_matrix_file,api_key):
+    def __init__(self, file_path, similarity_matrix_file,api_key=None):
         self.file_path = file_path
         self.similarity_matrix_file = similarity_matrix_file
         self.similarity_matrix = self.load_similarity_matrix()
-        self.text_embedder = TextEmbedder(api_key=api_key)  # API 키 전달
+        self.text_embedder = TextEmbedder(api_key=api_key)
 
         # 변수 초기화
         self.num_users = None
@@ -137,7 +131,7 @@ class Loader:
         # 데이터 전처리
         item_df['item_category'] = item_df['item_category'].astype("category").cat.codes
         item_df['media_type'] = item_df['media_type'].map({'short': 0, 'long': 1})
-        item_df['target'] = item_df['score'].apply(lambda x: 1 if x >= 0.85 else 0)  # 0과 1로 설정
+        item_df['target'] = item_df['score'].apply(lambda x: 1 if x >= 0.65 else 0)  # 0과 1로 설정
 
         creator_df['channel_category'] = creator_df['channel_category'].astype("category").cat.codes
         creator_df['subscribers'] = creator_df['subscribers'].replace({',': ''}, regex=True).astype(int)
@@ -171,9 +165,8 @@ class Loader:
             item_category=item_df['item_category'].values,
             media_type=item_df['media_type'].values,
             channel_category=creator_df['channel_category'].values,
-            subscribers=creator_df['subscribers'].values,  # 원본 값 사용
+            subscribers=creator_df['subscribers'].values,
             item_category_similarities=item_category_similarities,
-            api_key=self.text_embedder.api_key  # API 키 전달
         )
 
     def load_user_metadata(self):

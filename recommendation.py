@@ -2,7 +2,12 @@ import torch
 import pickle
 from NeuMF import NeuMF
 from data_preprocess import Loader, TextEmbedder
+import os
+from dotenv import load_dotenv
 
+# .env 파일 로드
+load_dotenv()
+API_KEY = os.getenv("OPENAI_API_KEY")  # OpenAI API 키 가져오기
 
 # 추천 시스템 클래스
 class Recommender:
@@ -23,7 +28,7 @@ class Recommender:
         similarity_matrix_file = 'similarity_matrix.csv'
 
         self.loader = Loader(file_path, similarity_matrix_file)
-        self.text_embedder = TextEmbedder()
+        self.text_embedder = TextEmbedder(api_key=API_KEY)
 
         # 사용자 및 아이템 메타데이터 로드
         self.user_metadata = self.loader.load_user_metadata()
