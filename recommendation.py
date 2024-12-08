@@ -23,7 +23,7 @@ class Recommender:
         similarity_matrix_file = 'similarity_matrix.csv'
 
         self.loader = Loader(file_path, similarity_matrix_file)
-        self.text_embedder = TextEmbedder()
+        self.text_embedder = TextEmbedder(api_key=API_KEY)
 
         # 사용자 및 아이템 메타데이터 로드
         self.user_metadata = self.loader.load_user_metadata()
